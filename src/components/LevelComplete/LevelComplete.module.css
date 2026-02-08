@@ -1,0 +1,89 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 46, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #33ff99;
+  text-shadow: 0 0 30px rgba(51, 255, 153, 0.6);
+  margin-bottom: 8px;
+}
+
+.levelName {
+  font-size: 1rem;
+  color: rgba(200, 210, 255, 0.7);
+  margin-bottom: 24px;
+}
+
+.stats {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+.stat {
+  text-align: center;
+}
+
+.statValue {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #ffcc00;
+}
+
+.statLabel {
+  font-size: 0.7rem;
+  color: rgba(200, 210, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.btn {
+  padding: 12px 28px;
+  border: 2px solid;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.btn:active {
+  transform: scale(0.95);
+}
+
+.nextBtn {
+  border-color: #33ff99;
+  background: rgba(51, 255, 153, 0.15);
+  color: #33ff99;
+}
+
+.nextBtn:hover {
+  background: rgba(51, 255, 153, 0.3);
+}
+
+.menuBtn {
+  border-color: rgba(200, 210, 255, 0.3);
+  background: rgba(200, 210, 255, 0.05);
+  color: rgba(200, 210, 255, 0.7);
+}
+
+.menuBtn:hover {
+  background: rgba(200, 210, 255, 0.15);
+}
