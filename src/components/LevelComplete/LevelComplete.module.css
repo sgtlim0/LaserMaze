@@ -8,10 +8,11 @@
   background: rgba(10, 10, 46, 0.85);
   backdrop-filter: blur(8px);
   z-index: 10;
+  padding: 20px;
 }
 
 .title {
-  font-size: 2rem;
+  font-size: clamp(1.4rem, 5vw, 2rem);
   font-weight: 900;
   color: #33ff99;
   text-shadow: 0 0 30px rgba(51, 255, 153, 0.6);
@@ -19,14 +20,14 @@
 }
 
 .levelName {
-  font-size: 1rem;
+  font-size: clamp(0.8rem, 3vw, 1rem);
   color: rgba(200, 210, 255, 0.7);
   margin-bottom: 24px;
 }
 
 .stats {
   display: flex;
-  gap: 32px;
+  gap: clamp(20px, 6vw, 32px);
   margin-bottom: 32px;
 }
 
@@ -35,7 +36,7 @@
 }
 
 .statValue {
-  font-size: 1.8rem;
+  font-size: clamp(1.2rem, 4vw, 1.8rem);
   font-weight: 800;
   color: #ffcc00;
 }
@@ -53,19 +54,21 @@
 }
 
 .btn {
-  padding: 12px 28px;
+  padding: 12px 24px;
   border: 2px solid;
   border-radius: 12px;
-  font-size: 0.9rem;
+  font-size: clamp(0.75rem, 2.5vw, 0.9rem);
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
   text-transform: uppercase;
   letter-spacing: 1px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .btn:active {
-  transform: scale(0.95);
+  transform: scale(0.92);
 }
 
 .nextBtn {

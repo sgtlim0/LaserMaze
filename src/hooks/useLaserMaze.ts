@@ -3,11 +3,11 @@ import type { Cell, FloatingText, GamePhase, GameState, Particle } from '../game
 import { traceLaser, checkLevelComplete } from '../game/laser.ts'
 import { LEVELS } from '../game/levels.ts'
 import {
-  CELL_SIZE, GRID_PADDING, HEADER_HEIGHT,
+  GRID_PADDING, HEADER_HEIGHT,
   GRID_LINE_COLOR, GRID_DOT_COLOR,
   MIRROR_COLOR, MIRROR_FIXED_COLOR, WALL_COLOR,
   TARGET_COLOR, TARGET_HIT_COLOR, EMITTER_COLOR,
-  COMPLETED_LEVELS_KEY,
+  COMPLETED_LEVELS_KEY, MAX_CELL_SIZE, MIN_CELL_SIZE,
 } from '../game/constants.ts'
 import {
   playMirrorRotate, playLaserFire, playTargetHit,
@@ -16,6 +16,12 @@ import {
 } from '../utils/sound.ts'
 
 // ---- Pure functions outside hook ----
+
+function calcCellSize(canvasW: number, canvasH: number, cols: number, rows: number): number {
+  const maxW = (canvasW - GRID_PADDING * 2) / cols
+  const maxH = (canvasH - HEADER_HEIGHT - GRID_PADDING * 2) / rows
+  return Math.max(MIN_CELL_SIZE, Math.min(MAX_CELL_SIZE, Math.floor(Math.min(maxW, maxH))))
+}
 
 function deepCopyGrid(grid: Cell[][]): Cell[][] {
   return grid.map(row => row.map(cell => ({ ...cell })))
@@ -111,10 +117,10 @@ function tickFloatingTexts(texts: FloatingText[], dt: number): FloatingText[] {
     .filter(t => t.life > 0)
 }
 
-function cellCenter(row: number, col: number, offsetX: number, offsetY: number): { cx: number; cy: number } {
+function cellCenter(row: number, col: number, offsetX: number, offsetY: number, cellSize: number): { cx: number; cy: number } {
   return {
-    cx: offsetX + col * CELL_SIZE + CELL_SIZE / 2,
-    cy: offsetY + row * CELL_SIZE + CELL_SIZE / 2,
+    cx: offsetX + col * cellSize + cellSize / 2,
+    cy: offsetY + row * cellSize + cellSize / 2,
   }
 }
 
@@ -189,28 +195,27 @@ function drawGrid(
   ctx: CanvasRenderingContext2D,
   rows: number, cols: number,
   offsetX: number, offsetY: number,
+  cellSize: number,
 ): void {
-  // Grid lines
   ctx.strokeStyle = GRID_LINE_COLOR
   ctx.lineWidth = 1
   for (let r = 0; r <= rows; r++) {
     ctx.beginPath()
-    ctx.moveTo(offsetX, offsetY + r * CELL_SIZE)
-    ctx.lineTo(offsetX + cols * CELL_SIZE, offsetY + r * CELL_SIZE)
+    ctx.moveTo(offsetX, offsetY + r * cellSize)
+    ctx.lineTo(offsetX + cols * cellSize, offsetY + r * cellSize)
     ctx.stroke()
   }
   for (let c = 0; c <= cols; c++) {
     ctx.beginPath()
-    ctx.moveTo(offsetX + c * CELL_SIZE, offsetY)
-    ctx.lineTo(offsetX + c * CELL_SIZE, offsetY + rows * CELL_SIZE)
+    ctx.moveTo(offsetX + c * cellSize, offsetY)
+    ctx.lineTo(offsetX + c * cellSize, offsetY + rows * cellSize)
     ctx.stroke()
   }
-  // Corner dots
   ctx.fillStyle = GRID_DOT_COLOR
   for (let r = 0; r <= rows; r++) {
     for (let c = 0; c <= cols; c++) {
       ctx.beginPath()
-      ctx.arc(offsetX + c * CELL_SIZE, offsetY + r * CELL_SIZE, 2, 0, Math.PI * 2)
+      ctx.arc(offsetX + c * cellSize, offsetY + r * cellSize, 2, 0, Math.PI * 2)
       ctx.fill()
     }
   }
@@ -221,9 +226,10 @@ function drawCell(
   cell: Cell, row: number, col: number,
   offsetX: number, offsetY: number,
   frameCount: number, selected: boolean,
+  cellSize: number,
 ): void {
-  const { cx, cy } = cellCenter(row, col, offsetX, offsetY)
-  const half = CELL_SIZE / 2 - 4
+  const { cx, cy } = cellCenter(row, col, offsetX, offsetY, cellSize)
+  const half = cellSize / 2 - 4
 
   if (cell.type === 'wall') {
     // 3D-ish wall block
@@ -534,15 +540,16 @@ function segEndpoints(
   seg: { from: { row: number; col: number }; to: { row: number; col: number } },
   rows: number, cols: number,
   offsetX: number, offsetY: number,
+  cellSize: number,
 ): { fx: number; fy: number; tx: number; ty: number } {
   const fromIn = seg.from.row >= 0 && seg.from.row < rows && seg.from.col >= 0 && seg.from.col < cols
   const toIn = seg.to.row >= 0 && seg.to.row < rows && seg.to.col >= 0 && seg.to.col < cols
   const fc = fromIn
-    ? cellCenter(seg.from.row, seg.from.col, offsetX, offsetY)
-    : cellCenter(Math.max(0, Math.min(seg.from.row, rows - 1)), Math.max(0, Math.min(seg.from.col, cols - 1)), offsetX, offsetY)
+    ? cellCenter(seg.from.row, seg.from.col, offsetX, offsetY, cellSize)
+    : cellCenter(Math.max(0, Math.min(seg.from.row, rows - 1)), Math.max(0, Math.min(seg.from.col, cols - 1)), offsetX, offsetY, cellSize)
   const tc = toIn
-    ? cellCenter(seg.to.row, seg.to.col, offsetX, offsetY)
-    : { cx: offsetX + seg.to.col * CELL_SIZE + CELL_SIZE / 2, cy: offsetY + seg.to.row * CELL_SIZE + CELL_SIZE / 2 }
+    ? cellCenter(seg.to.row, seg.to.col, offsetX, offsetY, cellSize)
+    : { cx: offsetX + seg.to.col * cellSize + cellSize / 2, cy: offsetY + seg.to.row * cellSize + cellSize / 2 }
   return { fx: fc.cx, fy: fc.cy, tx: tc.cx, ty: tc.cy }
 }
 
@@ -551,6 +558,7 @@ function drawLaser(
   state: GameState,
   offsetX: number, offsetY: number,
   frameCount: number,
+  cellSize: number,
 ): void {
   const { laserPath } = state
   if (laserPath.segments.length === 0) return
@@ -566,7 +574,7 @@ function drawLaser(
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   for (const seg of laserPath.segments) {
-    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY, cellSize)
     ctx.beginPath()
     ctx.moveTo(fx, fy)
     ctx.lineTo(tx, ty)
@@ -583,7 +591,7 @@ function drawLaser(
   ctx.shadowColor = '#ff3366'
   ctx.shadowBlur = 20
   for (const seg of laserPath.segments) {
-    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY, cellSize)
     ctx.beginPath()
     ctx.moveTo(fx, fy)
     ctx.lineTo(tx, ty)
@@ -600,7 +608,7 @@ function drawLaser(
   ctx.shadowColor = '#ff6699'
   ctx.shadowBlur = 12
   for (const seg of laserPath.segments) {
-    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY, cellSize)
     ctx.beginPath()
     ctx.moveTo(fx, fy)
     ctx.lineTo(tx, ty)
@@ -617,7 +625,7 @@ function drawLaser(
   ctx.shadowColor = '#ff3366'
   ctx.shadowBlur = 8
   for (const seg of laserPath.segments) {
-    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY, cellSize)
     ctx.beginPath()
     ctx.moveTo(fx, fy)
     ctx.lineTo(tx, ty)
@@ -632,7 +640,7 @@ function drawLaser(
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   for (const seg of laserPath.segments) {
-    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY, cellSize)
     ctx.beginPath()
     ctx.moveTo(fx, fy)
     ctx.lineTo(tx, ty)
@@ -651,7 +659,7 @@ function drawLaser(
     const segT = (t * totalSegs) - segIdx
     if (segIdx >= totalSegs) continue
     const seg = laserPath.segments[segIdx]
-    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY, cellSize)
     const px = fx + (tx - fx) * segT
     const py = fy + (ty - fy) * segT
 
@@ -675,7 +683,7 @@ function drawLaser(
       const key = `${to.row},${to.col}`
       if (toCell.type === 'mirror' && !hitSet.has(key)) {
         hitSet.add(key)
-        const { cx, cy } = cellCenter(to.row, to.col, offsetX, offsetY)
+        const { cx, cy } = cellCenter(to.row, to.col, offsetX, offsetY, cellSize)
 
         // Pulsing radial glow
         const rPulse = Math.sin(frameCount * 0.1 + to.row * 3 + to.col * 5) * 0.3 + 0.7
@@ -712,7 +720,7 @@ function drawLaser(
 
       // Target glow ring when hit
       if (toCell.type === 'target' && toCell.hit) {
-        const { cx, cy } = cellCenter(to.row, to.col, offsetX, offsetY)
+        const { cx, cy } = cellCenter(to.row, to.col, offsetX, offsetY, cellSize)
         const tPulse = Math.sin(frameCount * 0.08 + to.row) * 0.3 + 0.7
         ctx.save()
         ctx.globalAlpha = 0.4 * tPulse
@@ -749,7 +757,7 @@ function drawLaser(
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (state.grid[r][c].type === 'emitter') {
-        const { cx, cy } = cellCenter(r, c, offsetX, offsetY)
+        const { cx, cy } = cellCenter(r, c, offsetX, offsetY, cellSize)
         for (let ri = 0; ri < 3; ri++) {
           const ringT = ((frameCount * 0.02 + ri * 0.33) % 1)
           const ringR = 10 + ringT * 20
@@ -876,8 +884,9 @@ function renderGame(
   const { grid, frameCount, level } = state
   const rows = grid.length
   const cols = grid[0].length
-  const gridW = cols * CELL_SIZE
-  const gridH = rows * CELL_SIZE
+  const cellSize = calcCellSize(canvasW, canvasH, cols, rows)
+  const gridW = cols * cellSize
+  const gridH = rows * cellSize
   const offsetX = (canvasW - gridW) / 2
   const offsetY = HEADER_HEIGHT + (canvasH - HEADER_HEIGHT - gridH) / 2
 
@@ -890,7 +899,7 @@ function renderGame(
 
   drawBackground(ctx, canvasW, canvasH, frameCount)
   drawHeader(ctx, canvasW, level, state.moves, LEVELS[level].name)
-  drawGrid(ctx, rows, cols, offsetX, offsetY)
+  drawGrid(ctx, rows, cols, offsetX, offsetY, cellSize)
 
   // Draw cells
   for (let r = 0; r < rows; r++) {
@@ -898,12 +907,12 @@ function renderGame(
       const cell = grid[r][c]
       if (cell.type === 'empty') continue
       const selected = state.selectedCell?.row === r && state.selectedCell?.col === c
-      drawCell(ctx, cell, r, c, offsetX, offsetY, frameCount, selected)
+      drawCell(ctx, cell, r, c, offsetX, offsetY, frameCount, selected, cellSize)
     }
   }
 
   // Draw laser
-  drawLaser(ctx, state, offsetX, offsetY, frameCount)
+  drawLaser(ctx, state, offsetX, offsetY, frameCount, cellSize)
 
   // Draw particles
   for (const p of state.particles) {
@@ -1023,17 +1032,18 @@ export function useLaserMaze(canvasRef: React.RefObject<HTMLCanvasElement | null
     const s = stateRef.current
     const rows = s.grid.length
     const cols = s.grid[0].length
-    const gridW = cols * CELL_SIZE
-    const gridH = rows * CELL_SIZE
     const canvas = canvasRef.current
     if (!canvas) return
     const canvasW = canvas.width
     const canvasH = canvas.height
+    const cellSize = calcCellSize(canvasW, canvasH, cols, rows)
+    const gridW = cols * cellSize
+    const gridH = rows * cellSize
     const offsetX = (canvasW - gridW) / 2
     const offsetY = HEADER_HEIGHT + (canvasH - HEADER_HEIGHT - gridH) / 2
 
-    const col = Math.floor((canvasX - offsetX) / CELL_SIZE)
-    const row = Math.floor((canvasY - offsetY) / CELL_SIZE)
+    const col = Math.floor((canvasX - offsetX) / cellSize)
+    const row = Math.floor((canvasY - offsetY) / cellSize)
 
     if (row < 0 || row >= rows || col < 0 || col >= cols) return
 
@@ -1063,7 +1073,7 @@ export function useLaserMaze(canvasRef: React.RefObject<HTMLCanvasElement | null
       }
 
       // Grid offset for particle positions
-      const { cx, cy } = cellCenter(row, col, offsetX, offsetY)
+      const { cx, cy } = cellCenter(row, col, offsetX, offsetY, cellSize)
 
       // Play sound
       playMirrorRotate()
@@ -1076,7 +1086,7 @@ export function useLaserMaze(canvasRef: React.RefObject<HTMLCanvasElement | null
       for (const ht of newPath.hitTargets) {
         const key = `${ht.row},${ht.col}`
         if (!prevHitSet.has(key)) {
-          const tc = cellCenter(ht.row, ht.col, offsetX, offsetY)
+          const tc = cellCenter(ht.row, ht.col, offsetX, offsetY, cellSize)
           addStarParticles(s.particles, tc.cx, tc.cy, 12)
           addRingParticle(s.particles, tc.cx, tc.cy, TARGET_HIT_COLOR)
           addFloatingText(s.floatingTexts, tc.cx, tc.cy - 20, 'HIT!', TARGET_HIT_COLOR, 16)
@@ -1089,7 +1099,7 @@ export function useLaserMaze(canvasRef: React.RefObject<HTMLCanvasElement | null
         const { to } = seg
         if (to.row >= 0 && to.row < rows && to.col >= 0 && to.col < cols) {
           if (newGrid[to.row][to.col].type === 'mirror') {
-            const mc = cellCenter(to.row, to.col, offsetX, offsetY)
+            const mc = cellCenter(to.row, to.col, offsetX, offsetY, cellSize)
             addGlowParticle(s.particles, mc.cx, mc.cy, '#ff6699')
             playReflect()
           }
@@ -1173,14 +1183,15 @@ export function useLaserMaze(canvasRef: React.RefObject<HTMLCanvasElement | null
       if (s.frameCount % 3 === 0 && s.laserPath.segments.length > 0 && s.particles.length < 120) {
         const rows = s.grid.length
         const cols = s.grid[0].length
-        const gridW = cols * CELL_SIZE
-        const gridH = rows * CELL_SIZE
+        const cs = calcCellSize(canvas.width, canvas.height, cols, rows)
+        const gridW = cols * cs
+        const gridH = rows * cs
         const ox = (canvas.width - gridW) / 2
         const oy = HEADER_HEIGHT + (canvas.height - HEADER_HEIGHT - gridH) / 2
 
         // Random point along a random segment
         const seg = s.laserPath.segments[Math.floor(Math.random() * s.laserPath.segments.length)]
-        const ep = segEndpoints(seg, rows, cols, ox, oy)
+        const ep = segEndpoints(seg, rows, cols, ox, oy, cs)
         const t = Math.random()
         const px = ep.fx + (ep.tx - ep.fx) * t
         const py = ep.fy + (ep.ty - ep.fy) * t
@@ -1273,9 +1284,11 @@ export function useLaserMaze(canvasRef: React.RefObject<HTMLCanvasElement | null
       const parent = canvas!.parentElement
       if (!parent) return
       const w = Math.min(parent.clientWidth, 500)
-      const h = Math.min(parent.clientHeight, 750)
+      const h = Math.min(parent.clientHeight, 800)
       canvas!.width = w
       canvas!.height = h
+      canvas!.style.width = `${w}px`
+      canvas!.style.height = `${h}px`
     }
 
     resize()

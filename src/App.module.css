@@ -8,6 +8,7 @@
   background: #0a0a2e;
   overflow: hidden;
   position: relative;
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
 }
 
 .canvasWrapper {
@@ -15,7 +16,7 @@
   width: 100%;
   max-width: 500px;
   height: 100%;
-  max-height: 750px;
+  max-height: 800px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -23,22 +24,23 @@
 
 .canvas {
   display: block;
-  image-rendering: pixelated;
 }
 
 .backBtn {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  padding: 6px 14px;
+  top: 8px;
+  left: 8px;
+  padding: 8px 16px;
   border: 1px solid rgba(200, 210, 255, 0.3);
   border-radius: 8px;
-  background: rgba(200, 210, 255, 0.05);
+  background: rgba(10, 10, 46, 0.8);
   color: rgba(200, 210, 255, 0.7);
   font-size: 0.75rem;
   cursor: pointer;
   z-index: 5;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .backBtn:hover {
@@ -46,22 +48,34 @@
   border-color: rgba(200, 210, 255, 0.5);
 }
 
+.backBtn:active {
+  transform: scale(0.92);
+  background: rgba(200, 210, 255, 0.2);
+}
+
 .resetBtn {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  padding: 6px 14px;
+  top: 8px;
+  right: 8px;
+  padding: 8px 16px;
   border: 1px solid rgba(255, 51, 102, 0.3);
   border-radius: 8px;
-  background: rgba(255, 51, 102, 0.05);
+  background: rgba(10, 10, 46, 0.8);
   color: rgba(255, 51, 102, 0.7);
   font-size: 0.75rem;
   cursor: pointer;
   z-index: 5;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .resetBtn:hover {
   background: rgba(255, 51, 102, 0.15);
   border-color: rgba(255, 51, 102, 0.5);
+}
+
+.resetBtn:active {
+  transform: scale(0.92);
+  background: rgba(255, 51, 102, 0.2);
 }

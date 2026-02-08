@@ -1,6 +1,7 @@
-export const CELL_SIZE = 52
-export const GRID_PADDING = 20
-export const HEADER_HEIGHT = 60
+export const MAX_CELL_SIZE = 52
+export const MIN_CELL_SIZE = 28
+export const GRID_PADDING = 16
+export const HEADER_HEIGHT = 56
 
 export const LASER_COLORS = [
   '#ff3366',
