@@ -4,10 +4,10 @@ import { traceLaser, checkLevelComplete } from '../game/laser.ts'
 import { LEVELS } from '../game/levels.ts'
 import {
   CELL_SIZE, GRID_PADDING, HEADER_HEIGHT,
-  BG_COLOR, GRID_LINE_COLOR, GRID_DOT_COLOR,
+  GRID_LINE_COLOR, GRID_DOT_COLOR,
   MIRROR_COLOR, MIRROR_FIXED_COLOR, WALL_COLOR,
   TARGET_COLOR, TARGET_HIT_COLOR, EMITTER_COLOR,
-  LASER_GLOW_COLOR, COMPLETED_LEVELS_KEY,
+  COMPLETED_LEVELS_KEY,
 } from '../game/constants.ts'
 import {
   playMirrorRotate, playLaserFire, playTargetHit,
@@ -121,25 +121,66 @@ function cellCenter(row: number, col: number, offsetX: number, offsetY: number):
 // ---- Drawing functions ----
 
 function drawBackground(ctx: CanvasRenderingContext2D, w: number, h: number, frameCount: number): void {
-  // Gradient background
+  // Rich gradient background
   const grad = ctx.createLinearGradient(0, 0, 0, h)
-  grad.addColorStop(0, BG_COLOR)
-  grad.addColorStop(0.5, '#0d0d3a')
-  grad.addColorStop(1, '#0a0a2e')
+  grad.addColorStop(0, '#050520')
+  grad.addColorStop(0.3, '#0a0a35')
+  grad.addColorStop(0.6, '#0d0840')
+  grad.addColorStop(1, '#060525')
   ctx.fillStyle = grad
   ctx.fillRect(0, 0, w, h)
 
-  // Animated star field
+  // Subtle nebula swirls
   ctx.save()
-  for (let i = 0; i < 40; i++) {
-    const sx = ((i * 137.5 + frameCount * 0.02 * (i % 3 + 1)) % w)
-    const sy = ((i * 89.3 + frameCount * 0.01 * (i % 2 + 1)) % h)
-    const twinkle = Math.sin(frameCount * 0.05 + i) * 0.3 + 0.7
-    ctx.globalAlpha = 0.15 * twinkle
-    ctx.fillStyle = '#aabbff'
+  for (let i = 0; i < 3; i++) {
+    const nx = w * (0.2 + i * 0.3) + Math.sin(frameCount * 0.005 + i * 2) * 30
+    const ny = h * (0.3 + i * 0.2) + Math.cos(frameCount * 0.004 + i) * 20
+    const nGrad = ctx.createRadialGradient(nx, ny, 0, nx, ny, 120)
+    const hue = (frameCount * 0.1 + i * 120) % 360
+    nGrad.addColorStop(0, `hsla(${hue}, 60%, 30%, 0.06)`)
+    nGrad.addColorStop(0.5, `hsla(${hue}, 50%, 20%, 0.03)`)
+    nGrad.addColorStop(1, 'transparent')
+    ctx.fillStyle = nGrad
+    ctx.fillRect(0, 0, w, h)
+  }
+  ctx.restore()
+
+  // Animated star field - 3 depth layers
+  ctx.save()
+  // Far stars (tiny, slow)
+  for (let i = 0; i < 50; i++) {
+    const sx = ((i * 137.5 + frameCount * 0.008) % w)
+    const sy = ((i * 89.3 + frameCount * 0.004) % h)
+    const twinkle = Math.sin(frameCount * 0.03 + i * 1.7) * 0.4 + 0.6
+    ctx.globalAlpha = 0.12 * twinkle
+    ctx.fillStyle = '#8899cc'
     ctx.beginPath()
-    ctx.arc(sx, sy, 1 + (i % 3) * 0.5, 0, Math.PI * 2)
+    ctx.arc(sx, sy, 0.8, 0, Math.PI * 2)
     ctx.fill()
+  }
+  // Mid stars
+  for (let i = 0; i < 30; i++) {
+    const sx = ((i * 173.7 + frameCount * 0.015) % w)
+    const sy = ((i * 113.1 + frameCount * 0.008) % h)
+    const twinkle = Math.sin(frameCount * 0.05 + i * 2.3) * 0.3 + 0.7
+    ctx.globalAlpha = 0.2 * twinkle
+    ctx.fillStyle = '#aabbee'
+    ctx.beginPath()
+    ctx.arc(sx, sy, 1.2, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  // Near stars (brighter, larger, cross shape)
+  for (let i = 0; i < 12; i++) {
+    const sx = ((i * 211.3 + frameCount * 0.025) % w)
+    const sy = ((i * 151.7 + frameCount * 0.012) % h)
+    const twinkle = Math.sin(frameCount * 0.07 + i * 3.1) * 0.35 + 0.65
+    ctx.globalAlpha = 0.3 * twinkle
+    ctx.fillStyle = '#ddeeff'
+    ctx.shadowColor = '#aaccff'
+    ctx.shadowBlur = 4
+    const sz = 1.5 + (i % 3) * 0.5
+    ctx.fillRect(sx - sz, sy - 0.5, sz * 2, 1)
+    ctx.fillRect(sx - 0.5, sy - sz, 1, sz * 2)
   }
   ctx.restore()
 }
@@ -185,33 +226,72 @@ function drawCell(
   const half = CELL_SIZE / 2 - 4
 
   if (cell.type === 'wall') {
-    ctx.fillStyle = WALL_COLOR
+    // 3D-ish wall block
+    const wGrad = ctx.createLinearGradient(cx - half, cy - half, cx + half, cy + half)
+    wGrad.addColorStop(0, '#445577')
+    wGrad.addColorStop(0.5, WALL_COLOR)
+    wGrad.addColorStop(1, '#1a2233')
+    ctx.fillStyle = wGrad
     ctx.fillRect(cx - half, cy - half, half * 2, half * 2)
-    // Subtle pattern
-    ctx.strokeStyle = 'rgba(100, 130, 180, 0.2)'
+
+    // Subtle inset border
+    ctx.strokeStyle = 'rgba(80, 110, 160, 0.4)'
     ctx.lineWidth = 1
-    for (let i = -half; i < half; i += 8) {
+    ctx.strokeRect(cx - half + 1, cy - half + 1, half * 2 - 2, half * 2 - 2)
+
+    // Diagonal hash pattern
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(cx - half, cy - half, half * 2, half * 2)
+    ctx.clip()
+    ctx.strokeStyle = 'rgba(80, 110, 160, 0.15)'
+    ctx.lineWidth = 1
+    for (let i = -half * 2; i < half * 2; i += 7) {
       ctx.beginPath()
       ctx.moveTo(cx + i, cy - half)
-      ctx.lineTo(cx + i + half, cy + half)
+      ctx.lineTo(cx + i + half * 2, cy + half)
       ctx.stroke()
     }
+    ctx.restore()
     return
   }
 
   if (cell.type === 'emitter') {
-    // Pulsing emitter
     const pulse = Math.sin(frameCount * 0.08) * 0.2 + 0.8
+
+    // Outer ambient glow
     ctx.save()
-    ctx.shadowColor = EMITTER_COLOR
-    ctx.shadowBlur = 15 * pulse
-    ctx.fillStyle = EMITTER_COLOR
+    ctx.globalAlpha = 0.3 * pulse
+    const emGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 24)
+    emGrad.addColorStop(0, '#ff6699')
+    emGrad.addColorStop(0.5, 'rgba(255, 51, 102, 0.3)')
+    emGrad.addColorStop(1, 'rgba(255, 51, 102, 0)')
+    ctx.fillStyle = emGrad
     ctx.beginPath()
-    ctx.arc(cx, cy, 10, 0, Math.PI * 2)
+    ctx.arc(cx, cy, 24, 0, Math.PI * 2)
     ctx.fill()
     ctx.restore()
 
-    // Direction arrow
+    // Main emitter body
+    ctx.save()
+    ctx.shadowColor = '#ff3366'
+    ctx.shadowBlur = 20 * pulse
+    const bodyGrad = ctx.createRadialGradient(cx - 2, cy - 2, 0, cx, cy, 12)
+    bodyGrad.addColorStop(0, '#ff99bb')
+    bodyGrad.addColorStop(0.5, EMITTER_COLOR)
+    bodyGrad.addColorStop(1, '#cc1144')
+    ctx.fillStyle = bodyGrad
+    ctx.beginPath()
+    ctx.arc(cx, cy, 12, 0, Math.PI * 2)
+    ctx.fill()
+    // Inner bright core
+    ctx.fillStyle = 'rgba(255, 200, 220, 0.6)'
+    ctx.beginPath()
+    ctx.arc(cx - 2, cy - 2, 4, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+
+    // Direction arrow with glow
     ctx.save()
     ctx.translate(cx, cy)
     const angle = cell.direction === 'right' ? 0
@@ -219,11 +299,13 @@ function drawCell(
       : cell.direction === 'left' ? Math.PI
       : -Math.PI / 2
     ctx.rotate(angle)
+    ctx.shadowColor = '#ffffff'
+    ctx.shadowBlur = 8
     ctx.fillStyle = '#ffffff'
     ctx.beginPath()
-    ctx.moveTo(14, 0)
-    ctx.lineTo(8, -5)
-    ctx.lineTo(8, 5)
+    ctx.moveTo(18, 0)
+    ctx.lineTo(10, -6)
+    ctx.lineTo(10, 6)
     ctx.closePath()
     ctx.fill()
     ctx.restore()
@@ -235,92 +317,233 @@ function drawCell(
     const color = isHit ? TARGET_HIT_COLOR : TARGET_COLOR
     const pulse = Math.sin(frameCount * 0.06) * 0.15 + 0.85
 
+    // Ambient glow ring
+    ctx.save()
+    ctx.globalAlpha = isHit ? 0.4 : 0.15
+    const tGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 22)
+    tGrad.addColorStop(0, color)
+    tGrad.addColorStop(0.4, isHit ? 'rgba(255, 204, 0, 0.3)' : 'rgba(51, 255, 153, 0.15)')
+    tGrad.addColorStop(1, 'transparent')
+    ctx.fillStyle = tGrad
+    ctx.beginPath()
+    ctx.arc(cx, cy, 22, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+
     ctx.save()
     ctx.shadowColor = color
-    ctx.shadowBlur = isHit ? 20 : 10 * pulse
+    ctx.shadowBlur = isHit ? 25 : 12 * pulse
 
     // Outer ring
     ctx.strokeStyle = color
     ctx.lineWidth = 2.5
     ctx.globalAlpha = isHit ? 1 : 0.7
     ctx.beginPath()
-    ctx.arc(cx, cy, 12, 0, Math.PI * 2)
+    ctx.arc(cx, cy, 14, 0, Math.PI * 2)
     ctx.stroke()
 
-    // Inner dot
-    ctx.fillStyle = color
-    ctx.globalAlpha = isHit ? 1 : 0.5
+    // Second ring (rotating dashed)
+    if (!isHit) {
+      ctx.setLineDash([4, 4])
+      ctx.lineDashOffset = frameCount * 0.5
+      ctx.lineWidth = 1
+      ctx.globalAlpha = 0.4
+      ctx.beginPath()
+      ctx.arc(cx, cy, 18, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
+
+    // Inner dot with gradient
+    const dotGrad = ctx.createRadialGradient(cx - 1, cy - 1, 0, cx, cy, 6)
+    dotGrad.addColorStop(0, '#ffffff')
+    dotGrad.addColorStop(0.5, color)
+    dotGrad.addColorStop(1, isHit ? '#cc8800' : '#009944')
+    ctx.fillStyle = dotGrad
+    ctx.globalAlpha = isHit ? 1 : 0.6
     ctx.beginPath()
-    ctx.arc(cx, cy, 5, 0, Math.PI * 2)
+    ctx.arc(cx, cy, 6, 0, Math.PI * 2)
     ctx.fill()
 
     ctx.restore()
+
+    // Cross-hair lines when not hit
+    if (!isHit) {
+      ctx.save()
+      ctx.globalAlpha = 0.25 * pulse
+      ctx.strokeStyle = color
+      ctx.lineWidth = 0.5
+      ctx.beginPath()
+      ctx.moveTo(cx - 20, cy)
+      ctx.lineTo(cx - 8, cy)
+      ctx.moveTo(cx + 8, cy)
+      ctx.lineTo(cx + 20, cy)
+      ctx.moveTo(cx, cy - 20)
+      ctx.lineTo(cx, cy - 8)
+      ctx.moveTo(cx, cy + 8)
+      ctx.lineTo(cx, cy + 20)
+      ctx.stroke()
+      ctx.restore()
+    }
     return
   }
 
   if (cell.type === 'mirror') {
     const isFixed = cell.fixed
-    const color = isFixed ? MIRROR_FIXED_COLOR : MIRROR_COLOR
+    const baseColor = isFixed ? MIRROR_FIXED_COLOR : MIRROR_COLOR
+    const glowColor = isFixed ? 'rgba(136, 153, 187, 0.2)' : 'rgba(200, 220, 255, 0.15)'
 
-    // Selection highlight
+    // Subtle cell background glow
+    ctx.save()
+    ctx.globalAlpha = 0.08
+    ctx.fillStyle = baseColor
+    ctx.fillRect(cx - half, cy - half, half * 2, half * 2)
+    ctx.restore()
+
+    // Selection highlight with animated border
     if (selected && !isFixed) {
       ctx.save()
       ctx.strokeStyle = '#33ccff'
       ctx.lineWidth = 2
       ctx.shadowColor = '#33ccff'
-      ctx.shadowBlur = 12
-      ctx.strokeRect(cx - half - 2, cy - half - 2, (half + 2) * 2, (half + 2) * 2)
+      ctx.shadowBlur = 16
+      ctx.setLineDash([6, 3])
+      ctx.lineDashOffset = -frameCount * 0.5
+      const r = 4
+      const x1 = cx - half - 2, y1 = cy - half - 2, sz = (half + 2) * 2
+      ctx.beginPath()
+      ctx.moveTo(x1 + r, y1)
+      ctx.lineTo(x1 + sz - r, y1)
+      ctx.arcTo(x1 + sz, y1, x1 + sz, y1 + r, r)
+      ctx.lineTo(x1 + sz, y1 + sz - r)
+      ctx.arcTo(x1 + sz, y1 + sz, x1 + sz - r, y1 + sz, r)
+      ctx.lineTo(x1 + r, y1 + sz)
+      ctx.arcTo(x1, y1 + sz, x1, y1 + sz - r, r)
+      ctx.lineTo(x1, y1 + r)
+      ctx.arcTo(x1, y1, x1 + r, y1, r)
+      ctx.stroke()
+      ctx.setLineDash([])
       ctx.restore()
     }
 
+    // Mirror surface with gradient
     ctx.save()
     ctx.translate(cx, cy)
-    ctx.shadowColor = color
-    ctx.shadowBlur = 8
+    ctx.shadowColor = baseColor
+    ctx.shadowBlur = 10
 
-    ctx.strokeStyle = color
-    ctx.lineWidth = 3
-    ctx.lineCap = 'round'
-
+    // Draw mirror as a thicker metallic line with gradient
+    const mLen = half - 4
     if (cell.orientation === '/') {
+      const mGrad = ctx.createLinearGradient(-mLen, mLen, mLen, -mLen)
+      mGrad.addColorStop(0, glowColor)
+      mGrad.addColorStop(0.3, baseColor)
+      mGrad.addColorStop(0.5, '#ffffff')
+      mGrad.addColorStop(0.7, baseColor)
+      mGrad.addColorStop(1, glowColor)
+      ctx.strokeStyle = mGrad
+      ctx.lineWidth = 4
+      ctx.lineCap = 'round'
       ctx.beginPath()
-      ctx.moveTo(-half + 4, half - 4)
-      ctx.lineTo(half - 4, -half + 4)
+      ctx.moveTo(-mLen, mLen)
+      ctx.lineTo(mLen, -mLen)
       ctx.stroke()
-    } else {
-      ctx.beginPath()
-      ctx.moveTo(-half + 4, -half + 4)
-      ctx.lineTo(half - 4, half - 4)
-      ctx.stroke()
-    }
 
-    // Mirror surface reflection glint
-    const glint = Math.sin(frameCount * 0.04 + row * 2 + col * 3) * 0.3 + 0.4
-    ctx.globalAlpha = glint
-    ctx.strokeStyle = '#ffffff'
-    ctx.lineWidth = 1
-    if (cell.orientation === '/') {
+      // Bright center glint
+      const glint = Math.sin(frameCount * 0.06 + row * 2 + col * 3) * 0.4 + 0.5
+      ctx.globalAlpha = glint
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 1.5
       ctx.beginPath()
-      ctx.moveTo(-4, 4)
-      ctx.lineTo(4, -4)
+      ctx.moveTo(-5, 5)
+      ctx.lineTo(5, -5)
       ctx.stroke()
-    } else {
-      ctx.beginPath()
-      ctx.moveTo(-4, -4)
-      ctx.lineTo(4, 4)
-      ctx.stroke()
-    }
 
+      // Edge caps
+      ctx.globalAlpha = 0.6
+      ctx.fillStyle = baseColor
+      ctx.beginPath()
+      ctx.arc(-mLen, mLen, 3, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(mLen, -mLen, 3, 0, Math.PI * 2)
+      ctx.fill()
+    } else {
+      const mGrad = ctx.createLinearGradient(-mLen, -mLen, mLen, mLen)
+      mGrad.addColorStop(0, glowColor)
+      mGrad.addColorStop(0.3, baseColor)
+      mGrad.addColorStop(0.5, '#ffffff')
+      mGrad.addColorStop(0.7, baseColor)
+      mGrad.addColorStop(1, glowColor)
+      ctx.strokeStyle = mGrad
+      ctx.lineWidth = 4
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(-mLen, -mLen)
+      ctx.lineTo(mLen, mLen)
+      ctx.stroke()
+
+      // Bright center glint
+      const glint = Math.sin(frameCount * 0.06 + row * 2 + col * 3) * 0.4 + 0.5
+      ctx.globalAlpha = glint
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(-5, -5)
+      ctx.lineTo(5, 5)
+      ctx.stroke()
+
+      // Edge caps
+      ctx.globalAlpha = 0.6
+      ctx.fillStyle = baseColor
+      ctx.beginPath()
+      ctx.arc(-mLen, -mLen, 3, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(mLen, mLen, 3, 0, Math.PI * 2)
+      ctx.fill()
+    }
     ctx.restore()
 
-    // Fixed indicator
+    // Fixed indicator - small lock icon
     if (isFixed) {
-      ctx.fillStyle = 'rgba(136, 153, 187, 0.5)'
-      ctx.font = '8px monospace'
+      ctx.save()
+      ctx.globalAlpha = 0.5
+      ctx.fillStyle = '#667799'
+      ctx.font = '9px monospace'
       ctx.textAlign = 'center'
-      ctx.fillText('🔒', cx, cy + half + 2)
+      ctx.textBaseline = 'middle'
+      ctx.fillText('⊘', cx, cy + half + 6)
+      ctx.restore()
+    }
+
+    // Tap hint for non-fixed mirrors (subtle pulse)
+    if (!isFixed && !selected) {
+      const tapPulse = Math.sin(frameCount * 0.04 + row + col) * 0.1 + 0.1
+      ctx.save()
+      ctx.globalAlpha = tapPulse
+      ctx.strokeStyle = '#33ccff'
+      ctx.lineWidth = 1
+      ctx.strokeRect(cx - half + 1, cy - half + 1, (half - 1) * 2, (half - 1) * 2)
+      ctx.restore()
     }
   }
+}
+
+function segEndpoints(
+  seg: { from: { row: number; col: number }; to: { row: number; col: number } },
+  rows: number, cols: number,
+  offsetX: number, offsetY: number,
+): { fx: number; fy: number; tx: number; ty: number } {
+  const fromIn = seg.from.row >= 0 && seg.from.row < rows && seg.from.col >= 0 && seg.from.col < cols
+  const toIn = seg.to.row >= 0 && seg.to.row < rows && seg.to.col >= 0 && seg.to.col < cols
+  const fc = fromIn
+    ? cellCenter(seg.from.row, seg.from.col, offsetX, offsetY)
+    : cellCenter(Math.max(0, Math.min(seg.from.row, rows - 1)), Math.max(0, Math.min(seg.from.col, cols - 1)), offsetX, offsetY)
+  const tc = toIn
+    ? cellCenter(seg.to.row, seg.to.col, offsetX, offsetY)
+    : { cx: offsetX + seg.to.col * CELL_SIZE + CELL_SIZE / 2, cy: offsetY + seg.to.row * CELL_SIZE + CELL_SIZE / 2 }
+  return { fx: fc.cx, fy: fc.cy, tx: tc.cx, ty: tc.cy }
 }
 
 function drawLaser(
@@ -334,91 +557,211 @@ function drawLaser(
 
   const rows = state.grid.length
   const cols = state.grid[0].length
+  const pulse = Math.sin(frameCount * 0.06) * 0.15 + 0.85
 
-  // Draw laser glow (wider, semi-transparent)
+  // Layer 1: Ultra-wide ambient glow
   ctx.save()
-  ctx.strokeStyle = LASER_GLOW_COLOR
+  ctx.strokeStyle = 'rgba(255, 30, 80, 0.12)'
+  ctx.lineWidth = 28 * pulse
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  for (const seg of laserPath.segments) {
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
+    ctx.beginPath()
+    ctx.moveTo(fx, fy)
+    ctx.lineTo(tx, ty)
+    ctx.stroke()
+  }
+  ctx.restore()
+
+  // Layer 2: Wide soft glow
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255, 51, 102, 0.25)'
+  ctx.lineWidth = 16 * pulse
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.shadowColor = '#ff3366'
+  ctx.shadowBlur = 20
+  for (const seg of laserPath.segments) {
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
+    ctx.beginPath()
+    ctx.moveTo(fx, fy)
+    ctx.lineTo(tx, ty)
+    ctx.stroke()
+  }
+  ctx.restore()
+
+  // Layer 3: Medium glow (pinkish-red)
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255, 80, 130, 0.5)'
   ctx.lineWidth = 8
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-
+  ctx.shadowColor = '#ff6699'
+  ctx.shadowBlur = 12
   for (const seg of laserPath.segments) {
-    const { from, to } = seg
-    const fromInBounds = from.row >= 0 && from.row < rows && from.col >= 0 && from.col < cols
-    const toInBounds = to.row >= 0 && to.row < rows && to.col >= 0 && to.col < cols
-
-    const fc = fromInBounds
-      ? cellCenter(from.row, from.col, offsetX, offsetY)
-      : cellCenter(
-          Math.max(0, Math.min(from.row, rows - 1)),
-          Math.max(0, Math.min(from.col, cols - 1)),
-          offsetX, offsetY
-        )
-    const tc = toInBounds
-      ? cellCenter(to.row, to.col, offsetX, offsetY)
-      : {
-          cx: offsetX + to.col * CELL_SIZE + CELL_SIZE / 2,
-          cy: offsetY + to.row * CELL_SIZE + CELL_SIZE / 2,
-        }
-
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
     ctx.beginPath()
-    ctx.moveTo(fc.cx, fc.cy)
-    ctx.lineTo(tc.cx, tc.cy)
+    ctx.moveTo(fx, fy)
+    ctx.lineTo(tx, ty)
     ctx.stroke()
   }
   ctx.restore()
 
-  // Draw laser core (animated dash)
+  // Layer 4: Bright core beam (solid)
   ctx.save()
-  ctx.strokeStyle = '#ff3366'
-  ctx.lineWidth = 2.5
+  ctx.strokeStyle = '#ff4477'
+  ctx.lineWidth = 3.5
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  ctx.setLineDash([6, 4])
-  ctx.lineDashOffset = -frameCount * 0.8
-
+  ctx.shadowColor = '#ff3366'
+  ctx.shadowBlur = 8
   for (const seg of laserPath.segments) {
-    const { from, to } = seg
-    const fromInBounds = from.row >= 0 && from.row < rows && from.col >= 0 && from.col < cols
-    const toInBounds = to.row >= 0 && to.row < rows && to.col >= 0 && to.col < cols
-
-    const fc = fromInBounds
-      ? cellCenter(from.row, from.col, offsetX, offsetY)
-      : cellCenter(
-          Math.max(0, Math.min(from.row, rows - 1)),
-          Math.max(0, Math.min(from.col, cols - 1)),
-          offsetX, offsetY
-        )
-    const tc = toInBounds
-      ? cellCenter(to.row, to.col, offsetX, offsetY)
-      : {
-          cx: offsetX + to.col * CELL_SIZE + CELL_SIZE / 2,
-          cy: offsetY + to.row * CELL_SIZE + CELL_SIZE / 2,
-        }
-
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
     ctx.beginPath()
-    ctx.moveTo(fc.cx, fc.cy)
-    ctx.lineTo(tc.cx, tc.cy)
+    ctx.moveTo(fx, fy)
+    ctx.lineTo(tx, ty)
     ctx.stroke()
   }
   ctx.restore()
 
-  // Reflection sparkles at mirror points
+  // Layer 5: White-hot center
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255, 220, 230, 0.8)'
+  ctx.lineWidth = 1.5
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  for (const seg of laserPath.segments) {
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
+    ctx.beginPath()
+    ctx.moveTo(fx, fy)
+    ctx.lineTo(tx, ty)
+    ctx.stroke()
+  }
+  ctx.restore()
+
+  // Animated energy pulses traveling along the beam
+  ctx.save()
+  const pulseSpeed = frameCount * 0.04
+  for (let pi = 0; pi < 5; pi++) {
+    const t = ((pulseSpeed + pi * 0.2) % 1)
+    // Find which segment this pulse is on
+    const totalSegs = laserPath.segments.length
+    const segIdx = Math.floor(t * totalSegs)
+    const segT = (t * totalSegs) - segIdx
+    if (segIdx >= totalSegs) continue
+    const seg = laserPath.segments[segIdx]
+    const { fx, fy, tx, ty } = segEndpoints(seg, rows, cols, offsetX, offsetY)
+    const px = fx + (tx - fx) * segT
+    const py = fy + (ty - fy) * segT
+
+    const grad = ctx.createRadialGradient(px, py, 0, px, py, 10)
+    grad.addColorStop(0, 'rgba(255, 255, 255, 0.9)')
+    grad.addColorStop(0.3, 'rgba(255, 100, 150, 0.6)')
+    grad.addColorStop(1, 'rgba(255, 51, 102, 0)')
+    ctx.fillStyle = grad
+    ctx.beginPath()
+    ctx.arc(px, py, 10, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+
+  // Reflection bursts at mirror points
+  const hitSet = new Set<string>()
   for (const seg of laserPath.segments) {
     const { to } = seg
     if (to.row >= 0 && to.row < rows && to.col >= 0 && to.col < cols) {
       const toCell = state.grid[to.row][to.col]
-      if (toCell.type === 'mirror') {
+      const key = `${to.row},${to.col}`
+      if (toCell.type === 'mirror' && !hitSet.has(key)) {
+        hitSet.add(key)
         const { cx, cy } = cellCenter(to.row, to.col, offsetX, offsetY)
-        const sparkle = Math.sin(frameCount * 0.12 + to.row + to.col) * 0.3 + 0.7
+
+        // Pulsing radial glow
+        const rPulse = Math.sin(frameCount * 0.1 + to.row * 3 + to.col * 5) * 0.3 + 0.7
         ctx.save()
-        ctx.globalAlpha = sparkle
-        ctx.fillStyle = '#ffffff'
-        // Cross sparkle
-        const s = 4
-        ctx.fillRect(cx - 1, cy - s, 2, s * 2)
-        ctx.fillRect(cx - s, cy - 1, s * 2, 2)
+        ctx.globalAlpha = 0.6 * rPulse
+        const rGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 18)
+        rGrad.addColorStop(0, '#ffffff')
+        rGrad.addColorStop(0.3, 'rgba(255, 100, 200, 0.8)')
+        rGrad.addColorStop(1, 'rgba(255, 51, 102, 0)')
+        ctx.fillStyle = rGrad
+        ctx.beginPath()
+        ctx.arc(cx, cy, 18, 0, Math.PI * 2)
+        ctx.fill()
         ctx.restore()
+
+        // Rotating cross sparkle
+        ctx.save()
+        ctx.translate(cx, cy)
+        ctx.rotate(frameCount * 0.03 + to.row + to.col)
+        ctx.globalAlpha = rPulse
+        ctx.fillStyle = '#ffffff'
+        ctx.shadowColor = '#ffffff'
+        ctx.shadowBlur = 6
+        const arm = 8
+        ctx.fillRect(-1, -arm, 2, arm * 2)
+        ctx.fillRect(-arm, -1, arm * 2, 2)
+        // Diagonal cross
+        ctx.rotate(Math.PI / 4)
+        ctx.globalAlpha = rPulse * 0.5
+        ctx.fillRect(-0.5, -arm * 0.6, 1, arm * 1.2)
+        ctx.fillRect(-arm * 0.6, -0.5, arm * 1.2, 1)
+        ctx.restore()
+      }
+
+      // Target glow ring when hit
+      if (toCell.type === 'target' && toCell.hit) {
+        const { cx, cy } = cellCenter(to.row, to.col, offsetX, offsetY)
+        const tPulse = Math.sin(frameCount * 0.08 + to.row) * 0.3 + 0.7
+        ctx.save()
+        ctx.globalAlpha = 0.4 * tPulse
+        const tGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 22)
+        tGrad.addColorStop(0, TARGET_HIT_COLOR)
+        tGrad.addColorStop(0.5, 'rgba(255, 204, 0, 0.4)')
+        tGrad.addColorStop(1, 'rgba(255, 204, 0, 0)')
+        ctx.fillStyle = tGrad
+        ctx.beginPath()
+        ctx.arc(cx, cy, 22, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.restore()
+
+        // Orbiting dots
+        for (let oi = 0; oi < 3; oi++) {
+          const oAngle = frameCount * 0.06 + (oi * Math.PI * 2 / 3)
+          const oR = 16
+          const ox = cx + Math.cos(oAngle) * oR
+          const oy = cy + Math.sin(oAngle) * oR
+          ctx.save()
+          ctx.fillStyle = '#ffff66'
+          ctx.shadowColor = '#ffcc00'
+          ctx.shadowBlur = 6
+          ctx.beginPath()
+          ctx.arc(ox, oy, 2, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.restore()
+        }
+      }
+    }
+  }
+
+  // Emitter energy rings
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (state.grid[r][c].type === 'emitter') {
+        const { cx, cy } = cellCenter(r, c, offsetX, offsetY)
+        for (let ri = 0; ri < 3; ri++) {
+          const ringT = ((frameCount * 0.02 + ri * 0.33) % 1)
+          const ringR = 10 + ringT * 20
+          ctx.save()
+          ctx.globalAlpha = (1 - ringT) * 0.4
+          ctx.strokeStyle = '#ff6699'
+          ctx.lineWidth = 1.5
+          ctx.beginPath()
+          ctx.arc(cx, cy, ringR, 0, Math.PI * 2)
+          ctx.stroke()
+          ctx.restore()
+        }
       }
     }
   }
@@ -825,6 +1168,37 @@ export function useLaserMaze(canvasRef: React.RefObject<HTMLCanvasElement | null
       // Tick particles
       s.particles = tickParticles(s.particles, dt)
       s.floatingTexts = tickFloatingTexts(s.floatingTexts, dt)
+
+      // Spawn ambient laser particles every few frames
+      if (s.frameCount % 3 === 0 && s.laserPath.segments.length > 0 && s.particles.length < 120) {
+        const rows = s.grid.length
+        const cols = s.grid[0].length
+        const gridW = cols * CELL_SIZE
+        const gridH = rows * CELL_SIZE
+        const ox = (canvas.width - gridW) / 2
+        const oy = HEADER_HEIGHT + (canvas.height - HEADER_HEIGHT - gridH) / 2
+
+        // Random point along a random segment
+        const seg = s.laserPath.segments[Math.floor(Math.random() * s.laserPath.segments.length)]
+        const ep = segEndpoints(seg, rows, cols, ox, oy)
+        const t = Math.random()
+        const px = ep.fx + (ep.tx - ep.fx) * t
+        const py = ep.fy + (ep.ty - ep.fy) * t
+
+        const colors = ['#ff6699', '#ff99bb', '#ffccdd', '#ffffff', '#ff3366']
+        s.particles.push({
+          x: px + (Math.random() - 0.5) * 6,
+          y: py + (Math.random() - 0.5) * 6,
+          vx: (Math.random() - 0.5) * 0.8,
+          vy: -0.3 - Math.random() * 0.8,
+          life: 1, maxLife: 1,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          size: 1.5 + Math.random() * 2.5,
+          type: Math.random() > 0.7 ? 'star' : 'glow',
+          rotation: Math.random() * Math.PI * 2,
+          rotSpeed: (Math.random() - 0.5) * 0.1,
+        })
+      }
 
       // Decay effects
       if (s.shakeX !== 0 || s.shakeY !== 0) {
